@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>§4 fastai</title>
+    <meta charset="utf-8">
+
+    <!-- KaTeX -->
+    <link rel="stylesheet" href="./layouts/katex/katex.min.css">
+    <script defer src="./layouts/katex/katex.min.js"></script>
+    <script defer src="./layouts/katex/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ]
+            });
+        });
+    </script>
+
+    <!-- tabsets -->
+    <link rel="stylesheet" href="./layouts/tabsets/tabsets.min.css">
+    <script defer src="./layouts/tabsets/tabsets.min.js"></script>
+
+    <link rel="stylesheet" href="./layouts/style.css" />
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+<!-- copy and paste down below -->
+
+## §4 fastai
+
+---
+
+| [fastai (GitHub)](https://github.com/fastai/fastai) | [fastai (docs)](https://docs.fast.ai/) | [Practical Deep Learning](https://course.fast.ai/) |
+
+<img src="https://docs.fast.ai/images/layered.png" width="400">
+
+---
+
+### §4.1 `Dataloaders`
+
+We did not write [`Datasets` & `DataLoaders`](https://pytorch.org/tutorials/beginner/basics/data_tutorial.html), because it's highly variable from tasks to tasks. In general I would suggest:
+1. let your brain (bio-neural networks) understand the dataset intuitively by visualizing lots of examples from the dataset. (See [_A Recipe for Training Neural Networks_](https://karpathy.github.io/2019/04/25/recipe/))
+2. Use [polars](https://github.com/pola-rs/polars), [mojo](https://github.com/modularml/mojo) to load data because it's faster and more memory saving.
+
+---
+
+[Pytorch to fastai details](https://docs.fast.ai/examples/migrating_pytorch_verbose.html):
+
+```python
+from torch.utils.data import Dataset, DataLoader, SequentialSampler, BatchSampler
+from fastai.vision.all import *
+
+# subclass `torch.utils.data.Dataset` to create a custom Dataset
+class MyDataset(Dataset):
+    def __init__(self):
+        ...
+    def __len__(self):
+        ...
+    def __getitem__(self, index):
+        ...
+        return image, label# shape: image is [C, H, W], label is []
+
+# use `torch.utils.data` to load data
+dataset = MyDataset()
+data_size = len(dataset)
+train_size = int(0.8 * data_size)# 80% is train_loader
+indices = list(range(data_size))
+```
+
+---
+
+```python
+train_indices = indices[:train_size]
+train_batch_sampler = BatchSampler(SequentialSampler(train_indices),batch_size=32,drop_last=False)
+train_loader = DataLoader(dataset,num_workers=4,batch_sampler=train_batch_sampler)
+
+val_indices = indices[train_size:]
+val_batch_sampler = BatchSampler(SequentialSampler(val_indices),batch_size=32,drop_last=False)
+val_loader = DataLoader(dataset,num_workers=1,batch_sampler=val_batch_sampler)
+
+# use `fastai.vision.all.DataLoaders` to combine training data and validation data
+dls = DataLoaders(train_loader, val_loader)
+```
+
+Or you can use [`DataBlock`](https://docs.fast.ai/tutorial.datablock.html).
+
+---
+
+### §4.2 `Learner`
+
+Load the model:
+
+```python
+model = MyModel().cuda()
+```
+
+Use `fastai.vision.all.OptimWrapper` to wrap [`AdamW`](https://arxiv.org/abs/1711.05101) optimizer:
+
+```python
+def WrapperAdamW(param_groups,**kwargs):
+    return OptimWrapper(param_groups,torch.optim.AdamW)
+```
+
+---
+
+[`Learner`](https://docs.fast.ai/learner.html), [`Learner.to_fp16`](https://docs.fast.ai/callback.fp16.html#learner.to_fp16), [`Callbacks`](https://docs.fast.ai/callback.core.html):
+
+```python
+from functools import partial# python standard library
+
+learn = Learner(
+    dls,
+    model,
+    path='custom_path',
+    loss_func=custom_loss,
+    metrics=[custom_metric],
+    opt_func=partial(WrapperAdamW,eps=1e-7),
+    # opt_func=partial(OptimWrapper,opt=torch.optim.AdamW,eps=1e-7)
+    cbs=[
+        CSVLogger(),
+        GradientClip(3.0),
+        EMACallback(),
+        SaveModelCallback(monitor='custom_metric',comp=np.less,every_epoch=True),
+        GradientAccumulation(n_acc=4096//32)# divided by `batch_size`
+    ]
+).to_fp16()
+```
+
+---
+
+[`Learner.lr_find`](https://docs.fast.ai/callback.schedule.html#learner.lr_find), [[1506.01186] _Cyclical Learning Rates for Training Neural Networks_](https://arxiv.org/abs/1506.01186):
+
+```python
+learn.lr_find(suggest_funcs=(slide, valley))
+```
+
+[`Learner.fit_one_cycle`](https://docs.fast.ai/callback.schedule.html#learner.fit_one_cycle) uses [1cycle policy](https://arxiv.org/abs/1708.07120):
+
+```python
+learn.fit_one_cycle(
+    8,
+    lr_max=1e-5,
+    wd=0.05,
+    pct_start=0.25,
+    div=25,
+    div_final=100000,
+)
+```
+
+[`Learner.save`](https://docs.fast.ai/learner.html#learner.save):
+
+```python
+learn.save("my_model_opt", with_opt=True)
+learn.save("my_model", with_opt=False)
+```
+
+<!-- copy and paste till here -->
+
+    </textarea>
+    <script src="./layouts/remark-latest.min.js"></script>
+    <script>
+      var slideshow = remark.create({
+        ratio: "16:9",
+        highlightStyle: "github",
+      });
+    </script>
+  </body>
+</html>

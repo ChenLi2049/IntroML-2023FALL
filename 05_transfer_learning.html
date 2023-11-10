@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>§5 Transfer Learning</title>
+    <meta charset="utf-8">
+
+    <!-- KaTeX -->
+    <link rel="stylesheet" href="./layouts/katex/katex.min.css">
+    <script defer src="./layouts/katex/katex.min.js"></script>
+    <script defer src="./layouts/katex/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ]
+            });
+        });
+    </script>
+
+    <!-- tabsets -->
+    <link rel="stylesheet" href="./layouts/tabsets/tabsets.min.css">
+    <script defer src="./layouts/tabsets/tabsets.min.js"></script>
+
+    <link rel="stylesheet" href="./layouts/style.css" />
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+<!-- copy and paste down below -->
+
+## §5 Transfer Learning
+
+For different dataset and different goals.
+
+---
+
+### §5.1 Load Pretrained ResNet, ViT
+
+<div class="tabset"></div>
+
+- `ResNet101`
+    
+    [`fastai.vision.all.vision_learner`](https://docs.fast.ai/vision.learner.html#vision_learner)
+    
+    ```python
+    from fastai.vision.all import *
+    # https://github.com/pytorch/vision/tree/main/torchvision/models
+    from torchvision.models import resnet101
+    # https://pytorch.org/vision/stable/models.html
+    from torchvision.models import ResNet101_Weights
+    dls = ...
+    learn = vision_learner(
+        dls,
+        resnet101,
+        pretrained=True,
+        weights=ResNet101_Weights.IMAGENET1K_V2,
+        metrics=error_rate
+    )
+    learn.fine_tune(freeze_epochs=1,epochs=3,)# freeze_epochs run first
+    learn.save("finetuned_resnet101", with_opt=False)
+    ```
+
+- `ViT_B_16`
+    
+    [`fastai.vision.all.Learner`](https://docs.fast.ai/learner.html):
+      
+    ```python
+    from fastai.vision.all import *
+    from torchvision.models import vit_b_16
+    from torchvision.models import ViT_B_16_Weights
+    
+    dls = ...
+    
+    # https://github.com/rasbt/ViT-finetuning-scripts/
+    model = vit_b_16(weights=ViT_B_16_Weights.IMAGENET1K_V1)
+    model.heads.head = nn.Linear(in_features=768, out_features=2)# replace projection layer
+    model.to("cuda")
+    
+    learn = Learner(dls, model, metrics=error_rate)
+    learn.fine_tune(freeze_epochs=1, epochs=3)
+    learn.save("finetuned_vit_b_16", with_opt=False)
+    ```
+
+---
+
+### §5.2 Acoustic/Gravitational Wave Classification
+
+[[1912.11370] _Big Transfer (BiT): General Visual Representation Learning_](https://arxiv.org/abs/1912.11370):
+
+>We scale up pre-training, and propose a simple recipe that we call Big Transfer (BiT).
+
+#### §5.2.1 Acoustic Wave Classification
+
+- [_Great results on audio classification with fastai library_ | by Ethan Sutin](https://etown.medium.com/great-results-on-audio-classification-with-fastai-library-ccaf906c5f52)
+- [`UrbanSoundClassification.ipynb` (GitHub)](https://github.com/etown/dl1/blob/master/UrbanSoundClassification.ipynb)
+
+Each subfigure of the figure below is a _Power Spectrum_:
+
+- The horizontal axis is _Time_ ($\text{s}$).
+- The vertical axis is _Frequency_ ($\text{Hz}$).
+- The color (from dark to red to white) is _Sound Intensity Level_ ($\text{dB}$):
+
+---
+
+![](https://miro.medium.com/v2/resize:fit:1100/format:webp/1*D_yXVrrJD1Y46Z1T0OTOVA.png)
+
+---
+
+Use [`librosa.display.specshow`](https://librosa.org/doc/latest/generated/librosa.display.specshow.html#librosa.display.specshow) to draw _Power Spectrum_, then save as `.png`:
+
+```python
+S = librosa.feature.melspectrogram(y=samples, sr=sample_rate)
+librosa.display.specshow(librosa.power_to_db(S, ref=np.max))
+
+filename  = spectrogram_path/fold/Path(audio_file).name.replace('.wav','.png')
+plt.savefig(filename, dpi=400, bbox_inches='tight',pad_inches=0)
+```
+
+Use `fastai` to load pretrained model `ResNet34`:
+
+```python
+learn = cnn_learner(data, models.resnet34, metrics=error_rate)
+```
+
+---
+
+#### §5.2.2 Gravitational Wave Classification
+
+- [[2303.13917] Convolutional Neural Networks for the classification of glitches in gravitational-wave data streams (arxiv.org)](https://arxiv.org/abs/2303.13917)
+
+The picture below is Fig.2 of the paper:
+
+![](./assets/05_2303.13917_GWs.png)
+
+Use `fastai` to load pretrained model `ResNet18`, `ResNet26`, `ResNet34`, `ResNet50`, `ConvNext_Nano`, `ConvNext_Tiny`.
+
+---
+
+### §5.3 Category "Unknown"
+
+- Choose the size of the model by the size of the dataset, to avoid overfitting.
+- When the output probability of the final MLP layer is not dominated by one category (less than 95% or some threshold), you should be extra careful. Because actually this prediction is not correct.
+
+<!-- copy and paste till here -->
+
+    </textarea>
+    <script src="./layouts/remark-latest.min.js"></script>
+    <script>
+      var slideshow = remark.create({
+        ratio: "16:9",
+        highlightStyle: "github",
+      });
+    </script>
+  </body>
+</html>
